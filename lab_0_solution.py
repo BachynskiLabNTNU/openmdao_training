@@ -5,16 +5,17 @@ import numpy as np
 
 class computeMball(om.ExplicitComponent):
     def setup(self):
-         # global design variables
+        # Design variables
         self.add_input('D', val=1.0, units='m')
         self.add_input('T', val=1.0, units='m')
         
-        # problem constants
+        # Problem constants, can still be modified
         self.add_input('rho', val=1025.0, units='kg/m**3')
         self.add_input('rho_steel', val=7850.0, units='kg/m**3')
         self.add_input('mturb', val=1244000.0, units='kg')
         self.add_input('hfb', val=10.0, units='m')
         
+        # Outputs (ballast thickness, mass, and steel mass)
         self.add_output('t', val=1.0, units='m')
         self.add_output('mball', val=1.0, units='kg')
         self.add_output('msteel', val=1.0, units='kg')
@@ -39,17 +40,16 @@ class computeMball(om.ExplicitComponent):
 
 
 class computeTheta(om.ExplicitComponent): 
-    #T,rho,rho_steel,rho_conc, mturb,zturb,FT,hhub,hfb
     def setup(self): 
-        # global design variables
+        # Design variables
         self.add_input('D', val=1.0, units='m')
         self.add_input('T', val=1.0, units='m')
         
-        # result from another component
+        # Result from mBall component
         self.add_input('mball',val=0.0, units='kg')
         self.add_input('msteel',val=0.0, units='kg')
         
-        # problem constants
+        # Problem constants, can still be modified
         self.add_input('rho',val=1025.0, units='kg/m**3')
         self.add_input('rho_conc', val=2650.0, units='kg/m**3')
         self.add_input('mturb',val=1244000.0, units='kg')
@@ -58,10 +58,9 @@ class computeTheta(om.ExplicitComponent):
         self.add_input('hhub', val=120., units='m')
         self.add_input('hfb', val=10.0, units='m')
         
-        # outputs
+        # Output, static pitch angle (IN RADIANS)
         self.add_output('theta', val = 0.0, units='rad')
 
-        
     def compute(self, inputs, outputs):
         rho = inputs['rho']
         rho_conc = inputs['rho_conc']
