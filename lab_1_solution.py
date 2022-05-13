@@ -109,13 +109,17 @@ class computeTheta(om.ExplicitComponent):
         outputs['theta'] = theta
 
 class computeThrust(om.ExplicitComponent): 
+    '''
+    Compute thrust force based on static pitch angle, assuming a cosine loss from a fixed maximum thrust.  Introduces a cycle in the model!
+    '''
+    def initialize(self):
+        # Pass through dictionary containing constants - parameters that would be fixed during an optimization/solution
+        self.options.declare('params', types=dict)
+
     def setup(self): 
         # Result from theta component
         self.add_input('theta', val = 0.0, units='rad')
-        
-        # Problem constants, can still be modified
-        self.add_input('thrust_0',val= 1500000.0, units='N')
-        
+                
         # Output, thrust force
         self.add_output('FT', val = 0.0, units='N')
     
@@ -124,12 +128,25 @@ class computeThrust(om.ExplicitComponent):
         self.declare_partials('*', '*', method='fd')
         
     def compute(self, inputs, outputs):
-        thrust_0 = inputs['thrust_0']
+        # Bring in problem constants
+        params = self.options['params']
+        thrust_0 = params['thrust_0']
+        # Pitch angle input
         theta = inputs['theta']
         
+        # Simple cosine loss of thrust force based on pitch angle
         outputs['FT'] = thrust_0 * np.cos(theta)
-        
-class computeLCOE(om.ExplicitComponent):
+
+class computeLCOE(om.ImplicitComponent):
+    '''
+    Compute a "LCOE" of the spar-type floating wind turbine.  The output is unitless and the formula is not based on specific data or research, and is meant as a demonstration only.  
+
+    Note this is a 'fake' implicit component, we could easily define this explicitly and in fact have done just that below!
+    '''
+    def initialize(self):
+        # Pass through dictionary containing constants - parameters that would be fixed during an optimization/solution
+        self.options.declare('params', types=dict)
+
     def setup(self): 
         # Design variables
         self.add_input('D', val=1.0, units='m')
@@ -140,65 +157,25 @@ class computeLCOE(om.ExplicitComponent):
         self.add_input('msteel', val=0.0, units='kg')
         self.add_input('theta', val=0.0, units='rad')
         
-        # Problem constants, can still be modified
-        self.add_input('mturb', val=1302000.0, units='kg')
-        self.add_input('hhub', val=120, units='m')
-
         # Output, a unitless LCOE
         self.add_output('LCOE', val=0.0)
 
     def setup_partials(self):
-        # Finite difference all partials.
-        self.declare_partials('*', '*', method='fd')
-        
-    def compute(self, inputs, outputs):
-        D = inputs['D'] #diameter in m
-        T = inputs['T'] # draft in m
-        msteel = inputs['msteel']
-        mball = inputs['mball']
-        hhub = inputs['hhub']
-        theta = inputs['theta']
-        mturb = inputs['mturb']
-        
-        # Cost factors - can experiment with changing these
-        f1 = 20/1E7
-        f2 = 1/1E7
-        f3 = 1/1E7 
-        f4 = 1/1600
-
-        LCOE = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2))/(np.power(np.cos(theta),3))        
-        outputs['LCOE'] = LCOE
-
-class implicitComputeLCOE(om.ImplicitComponent):
-    ## Note this is a 'fake' implicit component, we could easily define this explicitly and in fact have done just that below!
-    def setup(self): 
-        # Design variables
-        self.add_input('D', val=1.0, units='m')
-        self.add_input('T', val=1.0, units='m')
-        
-        # Results from mBall and theta components
-        self.add_input('mball', val=0.0, units='kg')
-        self.add_input('msteel', val=0.0, units='kg')
-        self.add_input('theta', val=0.0, units='rad')
-        
-        # Problem constants, can still be modified
-        self.add_input('mturb', val=1302000.0, units='kg')
-        self.add_input('hhub', val=120, units='m')
-
-        # Output, a unitless LCOE
-        self.add_output('LCOE', val=0.0)
-
         # Declare FD partials (to be used if partials aren't defined below...)
         self.declare_partials('*', '*', method='fd')
 
     def apply_nonlinear(self, inputs, outputs, residuals):
+        # Bring in problem constants
+        params = self.options['params']
+        hhub = params['hhub']
+        mturb = params['mturb']
+        # Design Variables
         D = inputs['D'] #diameter in m
         T = inputs['T'] # draft in m
+        # Inputs from other components
         msteel = inputs['msteel']
         mball = inputs['mball']
-        hhub = inputs['hhub']
         theta = inputs['theta']
-        mturb = inputs['mturb']
 
         # Cost factors - can experiment with changing these
         f1 = 20/1E7
@@ -210,13 +187,17 @@ class implicitComputeLCOE(om.ImplicitComponent):
         residuals['LCOE'] = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2)) - outputs['LCOE']
     
     def linearize(self, inputs, outputs, partials):
+        # Bring in problem constants
+        params = self.options['params']
+        hhub = params['hhub']
+        mturb = params['mturb']
+        # Design Variables
         D = inputs['D'] #diameter in m
         T = inputs['T'] # draft in m
+        # Inputs from other components
         msteel = inputs['msteel']
         mball = inputs['mball']
-        hhub = inputs['hhub']
         theta = inputs['theta']
-        mturb = inputs['mturb']
 
         # Cost factors - can experiment with changing these
         f1 = 20/1E7
@@ -232,6 +213,52 @@ class implicitComputeLCOE(om.ImplicitComponent):
         partials['LCOE', 'theta'] = f3*mturb*hhub
         partials['LCOE', 'mturb'] = f3*theta*hhub
 
+class expComputeLCOE(om.ExplicitComponent):
+    '''
+    An explicit version of the LCOE component written above. 
+    '''
+    def initialize(self):
+        # Pass through dictionary containing constants - parameters that would be fixed during an optimization/solution
+        self.options.declare('params', types=dict)
+
+    def setup(self): 
+        # Design variables
+        self.add_input('D', val=1.0, units='m')
+        self.add_input('T', val=1.0, units='m')
+        
+        # Results from mBall and theta components
+        self.add_input('mball', val=0.0, units='kg')
+        self.add_input('msteel', val=0.0, units='kg')
+        self.add_input('theta', val=0.0, units='rad')
+        
+        # Output, a unitless LCOE
+        self.add_output('LCOE', val=0.0)
+
+    def setup_partials(self):
+        # Declare FD partials (to be used if partials aren't defined below...)
+        self.declare_partials('*', '*', method='fd')
+        
+    def compute(self, inputs, outputs):
+         # Bring in problem constants
+        params = self.options['params']
+        hhub = params['hhub']
+        mturb = params['mturb']
+        # Design Variables
+        D = inputs['D'] #diameter in m
+        T = inputs['T'] # draft in m
+        # Inputs from other components
+        msteel = inputs['msteel']
+        mball = inputs['mball']
+        theta = inputs['theta']
+        
+        # Cost factors - can experiment with changing these
+        f1 = 20/1E7
+        f2 = 1/1E7
+        f3 = 1/1E7 
+        f4 = 1/1600
+
+        LCOE = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2))/(np.power(np.cos(theta),3))        
+        outputs['LCOE'] = LCOE
 
 if __name__ == "__main__":
 
@@ -246,6 +273,7 @@ if __name__ == "__main__":
         'mturb': 1244000.0, # kg
         'zturb': 92.5, # m
         # 'FT':  1500000.0, # N --- Thrust force is no longer constant!
+        'thrust_0': 1500000.0, # N - Using a new 'baseline' thrust variable
         'hhub': 120., # m
         'hfb': 10.0, # m
     }
@@ -259,13 +287,13 @@ if __name__ == "__main__":
         promotes_inputs=['D','T','mball','msteel','FT'], 
         promotes_outputs=['theta'])
     model.add_subsystem('thrust_comp', 
-        computeThrust(),
-        promotes_inputs=['theta', 'thrust_0'], 
+        computeThrust(params=fwt_params),
+        promotes_inputs=['theta'], 
         promotes_outputs=['FT'])
     model.add_subsystem('LCOE_comp', 
-        # computeLCOE(),
-        implicitComputeLCOE(),
-        promotes_inputs=['D','T','mball','msteel','theta','mturb','hhub'],
+        # expComputeLCOE(params=fwt_params),
+        computeLCOE(params=fwt_params),
+        promotes_inputs=['D','T','mball','msteel','theta'],
         promotes_outputs=['LCOE'])
     
     # Set value of design variables
