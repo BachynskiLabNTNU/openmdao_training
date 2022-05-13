@@ -209,9 +209,7 @@ class computeLCOE(om.ImplicitComponent):
         partials['LCOE', 'T'] = 0.
         partials['LCOE', 'msteel'] = f1
         partials['LCOE', 'mball'] = f2
-        partials['LCOE', 'hhub'] = f3*theta*mturb
         partials['LCOE', 'theta'] = f3*mturb*hhub
-        partials['LCOE', 'mturb'] = f3*theta*hhub
 
 class expComputeLCOE(om.ExplicitComponent):
     '''
