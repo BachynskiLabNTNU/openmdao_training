@@ -297,7 +297,7 @@ if __name__ == "__main__":
     # Set value of design variables
     # Change these inputs to see the effect on results
     model.set_input_defaults('D',val=15.)
-    model.set_input_defaults('T',val=90.)
+    model.set_input_defaults('T',val=80.)
 
     # Connect model to problem     
     prob = om.Problem(model)
@@ -361,4 +361,4 @@ if __name__ == "__main__":
     print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
     
     # Create N2 diagram
-    om.n2(prob)
+    # om.n2(prob)
