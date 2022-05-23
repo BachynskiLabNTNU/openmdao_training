@@ -1,7 +1,9 @@
 ## Based on OpenMDAO Training Lab 1, found here: https://github.com/OpenMDAO/openmdao_training
 ## Adapted from Spar FWT OpenMDAO model by Erin Bachynski 
 
+from crypt import methods
 import openmdao.api as om
+import matplotlib.pyplot as plt
 import numpy as np
 
 class computeMball(om.ExplicitComponent):
@@ -21,7 +23,12 @@ class computeMball(om.ExplicitComponent):
         self.add_output('t', val=1.0, units='m')
         self.add_output('mball', val=1.0, units='kg')
         self.add_output('msteel', val=1.0, units='kg')
-        
+    
+    def setup_partials(self):
+        self.declare_partials('t',['T'])
+        self.declare_partials(of='mball', wrt=['D','T'], dependent=True, method='fd')
+        self.declare_partials(of='msteel',wrt=['D','T'], dependent=True, method='fd')
+
     def compute(self,inputs,outputs): 
         # Bring in problem constants
         params = self.options['params']
@@ -32,6 +39,9 @@ class computeMball(om.ExplicitComponent):
         
         D = inputs['D']
         T = inputs['T']
+
+        if (D/T) < (1./3.) :
+            raise om.AnalysisError("Inputs lead to unreasonable pitch angle!")
         
         # based on T, find thickness and ballast in order to meet vertical equilibrium
         t = 0.03+T/3000
@@ -42,6 +52,8 @@ class computeMball(om.ExplicitComponent):
         outputs['mball'] = mball
         outputs['msteel'] = msteel
 
+    def compute_partials(self, inputs, partials):
+        partials['t','T'] = 1/3000.
 
 class computeTheta(om.ExplicitComponent): 
     '''
@@ -63,6 +75,9 @@ class computeTheta(om.ExplicitComponent):
         
         # Output, static pitch angle (IN RADIANS)
         self.add_output('theta', val = 0.0, units='rad')
+    
+    def setup_partials(self):
+        self.declare_partials(of='*', wrt='*', method='fd')
 
     def compute(self, inputs, outputs):
         # Bring in problem constants
@@ -125,7 +140,7 @@ class computeThrust(om.ExplicitComponent):
     
     def setup_partials(self):
         # Finite difference all partials.
-        self.declare_partials('*', '*', method='fd')
+        self.declare_partials(of='FT', wrt='theta')
         
     def compute(self, inputs, outputs):
         # Bring in problem constants
@@ -136,6 +151,13 @@ class computeThrust(om.ExplicitComponent):
         
         # Simple cosine loss of thrust force based on pitch angle
         outputs['FT'] = thrust_0 * np.cos(theta)
+    
+    def compute_partials(self, inputs, partials):
+        params = self.options['params']
+        thrust_0 = params['thrust_0']
+        theta = inputs['theta']
+        
+        partials['FT','theta'] = -1. * thrust_0 * np.sin(theta)
 
 class computeLCOE(om.ImplicitComponent):
     '''
@@ -211,53 +233,6 @@ class computeLCOE(om.ImplicitComponent):
         partials['LCOE', 'mball'] = f2
         partials['LCOE', 'theta'] = f3*mturb*hhub
 
-class expComputeLCOE(om.ExplicitComponent):
-    '''
-    An explicit version of the LCOE component written above. 
-    '''
-    def initialize(self):
-        # Pass through dictionary containing constants - parameters that would be fixed during an optimization/solution
-        self.options.declare('params', types=dict)
-
-    def setup(self): 
-        # Design variables
-        self.add_input('D', val=1.0, units='m')
-        self.add_input('T', val=1.0, units='m')
-        
-        # Results from mBall and theta components
-        self.add_input('mball', val=0.0, units='kg')
-        self.add_input('msteel', val=0.0, units='kg')
-        self.add_input('theta', val=0.0, units='rad')
-        
-        # Output, a unitless LCOE
-        self.add_output('LCOE', val=0.0)
-
-    def setup_partials(self):
-        # Declare FD partials (to be used if partials aren't defined below...)
-        self.declare_partials('*', '*', method='fd')
-        
-    def compute(self, inputs, outputs):
-         # Bring in problem constants
-        params = self.options['params']
-        hhub = params['hhub']
-        mturb = params['mturb']
-        # Design Variables
-        D = inputs['D'] #diameter in m
-        T = inputs['T'] # draft in m
-        # Inputs from other components
-        msteel = inputs['msteel']
-        mball = inputs['mball']
-        theta = inputs['theta']
-        
-        # Cost factors - can experiment with changing these
-        f1 = 20/1E7
-        f2 = 1/1E7
-        f3 = 1/1E7 
-        f4 = 1/1600
-
-        LCOE = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2))/(np.power(np.cos(theta),3))        
-        outputs['LCOE'] = LCOE
-
 if __name__ == "__main__":
 
     # Define the model as a single group, and add subsystems.
@@ -296,8 +271,12 @@ if __name__ == "__main__":
     
     # Set value of design variables
     # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=25.)
-    model.set_input_defaults('T',val=40.)
+    model.set_input_defaults('D',val=15.)
+    model.set_input_defaults('T',val=80.)
+
+    model.add_design_var('D', lower=10., upper=60.)
+    model.add_design_var('T', lower=20., upper=150.)
+    model.add_constraint('theta', lower=-100.)
 
     # Connect model to problem     
     prob = om.Problem(model)
@@ -308,7 +287,7 @@ if __name__ == "__main__":
     solver_flag = 'newton'
 
     if solver_flag == 'newton':
-        prob.model.nonlinear_solver=om.NewtonSolver(iprint=2)
+        prob.model.nonlinear_solver=om.NewtonSolver(iprint=0)
         # solve_subsystems should almost always be turned on
         # it improves solver robustness
         prob.model.nonlinear_solver.options['solve_subsystems'] = True
@@ -351,14 +330,33 @@ if __name__ == "__main__":
     else:
         raise ValueError("bad solver selection!")
 
+    # Add DOE driver
+    prob.driver = om.DOEDriver(om.LatinHypercubeGenerator(samples=1000))
+    prob.driver.add_recorder(om.SqliteRecorder("designs.sql"))
+
     # Run model
     prob.setup()
-    prob.run_model()
+    prob.run_driver()
+    prob.cleanup()
 
-    # Debugging printouts
-    print('Diameter: %2.2f m' %prob.get_val('D'))
-    print('Draft: %2.2f m' %prob.get_val('T'))
-    print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
-    
-    # Create N2 diagram
-    # om.n2(prob)
+    # Case Reader
+    cr = om.CaseReader("designs.sql")
+    cases = cr.get_cases('driver', recurse=False)
+    D_values = np.array([])
+    T_values = np.array([])
+    thet_values = np.array([])
+    for case in cases:
+        if np.abs(float(case['theta'])*(180./np.pi)) < 10. :
+            thet_values = np.append(thet_values, float(case['theta'])*(180./np.pi))
+            D_values = np.append(D_values, float(case['D']))
+            T_values = np.append(T_values, float(case['T']))
+        else :
+            print("INVALID - Diameter = %3.3f m, Draft = %3.3f m, D/T = %3.3f" %(float(case['D']),float(case['T']), (float(case['D'])/float(case['T']))))
+
+    fig1, ax1 = plt.subplots()
+    # ax1.set_aspect('equal')
+    tcf = ax1.tricontourf(D_values, T_values, thet_values)
+    fig1.colorbar(tcf)
+    ax1.tricontour(D_values, T_values, thet_values, colors='k')
+    ax1.set_title('Contour plot of Static Pitch Angle')
+    plt.show()
