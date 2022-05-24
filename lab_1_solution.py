@@ -3,6 +3,8 @@
 
 import openmdao.api as om
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 class computeMball(om.ExplicitComponent):
     '''
@@ -38,6 +40,9 @@ class computeMball(om.ExplicitComponent):
         buoy = np.pi*np.power(D,2)/4*T*rho # displacement water mass
         msteel = rho_steel*(np.pi*D*(T+hfb)*t + 2*np.pi*np.power(D,2)/4*t) # steel mass
         mball = buoy-msteel-mturb # required ballast
+        
+        if mball < 0.0:
+            raise om.AnalysisError('Negative ballast!')
 
         outputs['mball'] = mball
         outputs['msteel'] = msteel
@@ -106,6 +111,9 @@ class computeTheta(om.ExplicitComponent):
             # 1DOF estimate of pitch angle
             theta = FT*hhub/C55 
 
+        if theta < 0.0:
+            # raise om.AnalysisError('Platform is unstable!')
+            theta = 90*np.pi/180
         outputs['theta'] = theta
 
 class computeThrust(om.ExplicitComponent): 
@@ -362,3 +370,27 @@ if __name__ == "__main__":
     
     # Create N2 diagram
     # om.n2(prob)
+    
+    
+    x1s = np.linspace(8,60,50)
+    x2s = np.linspace(40,200,100)
+    fLCOE = np.zeros((len(x1s),len(x2s)))
+    ftheta = np.zeros((len(x1s),len(x2s)))
+
+    for ii in range(0,len(x1s)):  
+        for jj in range(0,len(x2s)): 
+            # print(x1s[ii],x2s[jj])
+            prob.set_val('D',x1s[ii])
+            prob.set_val('T',x2s[jj])
+            prob.run_model()
+            fLCOE[ii,jj] = prob.model.LCOE_comp.get_val('LCOE')
+            ftheta[ii,jj] = prob.model.theta_comp.get_val('theta')*180/np.pi
+            # print(prob.model.theta_comp.get_val('theta')*180/np.pi)
+            # print(x1s[ii],x2s[jj],fLCOE[ii,jj], ftheta[ii,jj])
+
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    csLCOE = ax1.contour(x1s,x2s,np.transpose(fLCOE),np.linspace(1,200,100))
+    cstheta = ax2.contour(x1s,x2s,np.transpose(ftheta),np.linspace(0,45,100))
+    fig.colorbar(csLCOE,ax=ax1)
+    fig.colorbar(cstheta,ax=ax2)
