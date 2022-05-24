@@ -332,7 +332,7 @@ if __name__ == "__main__":
     solver_flag = 'newton'
 
     if solver_flag == 'newton':
-        prob.model.nonlinear_solver=om.NewtonSolver(iprint=2)
+        prob.model.nonlinear_solver=om.NewtonSolver(iprint=0)
         # solve_subsystems should almost always be turned on
         # it improves solver robustness
         prob.model.nonlinear_solver.options['solve_subsystems'] = True
