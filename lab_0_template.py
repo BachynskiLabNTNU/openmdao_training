@@ -91,26 +91,21 @@ class computeTheta(om.ExplicitComponent):
         
         g = 9.81 # acceleration due to gravity
 
-        # we can't have negative ballast, the function returns zero and 90 degree theta
-        if mball < 0: 
-            mball = 0
-            theta = np.pi/2
-            hbal = 0
-        else: 
-            #given the ballast mass, we can find the ballast height
-            hbal = mball/(rho_conc*np.pi*np.power(D,2)/4)
-            #total mass of the FWT
-            mtot = msteel + mball  + mturb
-            #hull steel contribution to center of gravity: m*z 
-            mZGsteel = msteel*((-T+hfb)/2) 
-            # overall CG
-            zG = ( mZGsteel + mturb*zturb + mball*(-T+hbal/2))/mtot
-            # waterplane moment of area
-            Iwp = np.pi*np.power((D/2),4)/4
-            # hydrostatic restoring force
-            C55 = rho*g*Iwp - (msteel+mball+mturb)*zG*g - rho*g*np.pi*np.power(D,2)/4*T*T/2
-            # 1DOF estimate of pitch angle
-            theta = FT*hhub/C55 
+        
+        #given the ballast mass, we can find the ballast height
+        hbal = mball/(rho_conc*np.pi*np.power(D,2)/4)
+        #total mass of the FWT
+        mtot = msteel + mball  + mturb
+        #hull steel contribution to center of gravity: m*z 
+        mZGsteel = msteel*((-T+hfb)/2) 
+        # overall CG
+        zG = ( mZGsteel + mturb*zturb + mball*(-T+hbal/2))/mtot
+        # waterplane moment of area
+        Iwp = np.pi*np.power((D/2),4)/4
+        # hydrostatic restoring force
+        C55 = rho*g*Iwp - (msteel+mball+mturb)*zG*g - rho*g*np.pi*np.power(D,2)/4*T*T/2
+        # 1DOF estimate of pitch angle
+        theta = FT*hhub/C55 
 
         outputs['theta'] = theta
 
