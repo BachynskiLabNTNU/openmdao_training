@@ -42,7 +42,7 @@ class computeMball(om.ExplicitComponent):
         mball = buoy-msteel-mturb # required ballast
         
         if mball < 0.0:
-            raise om.AnalysisError('Negative ballast!')
+            mball = 0
 
         outputs['mball'] = mball
         outputs['msteel'] = msteel
@@ -111,7 +111,7 @@ class computeTheta(om.ExplicitComponent):
             # 1DOF estimate of pitch angle
             theta = FT*hhub/C55 
 
-        if theta < 0.0:
+        if (theta < 0.0):
             # raise om.AnalysisError('Platform is unstable!')
             theta = 90*np.pi/180
         outputs['theta'] = theta
@@ -316,7 +316,7 @@ if __name__ == "__main__":
     solver_flag = 'newton'
 
     if solver_flag == 'newton':
-        prob.model.nonlinear_solver=om.NewtonSolver(iprint=2)
+        prob.model.nonlinear_solver=om.NewtonSolver(iprint=0)
         # solve_subsystems should almost always be turned on
         # it improves solver robustness
         prob.model.nonlinear_solver.options['solve_subsystems'] = True
@@ -372,25 +372,28 @@ if __name__ == "__main__":
     # om.n2(prob)
     
     
-    x1s = np.linspace(8,60,50)
-    x2s = np.linspace(40,200,100)
+    x1s = np.linspace(5,60,30)
+    x2s = np.linspace(30,200,40)
     fLCOE = np.zeros((len(x1s),len(x2s)))
     ftheta = np.zeros((len(x1s),len(x2s)))
 
     for ii in range(0,len(x1s)):  
         for jj in range(0,len(x2s)): 
-            # print(x1s[ii],x2s[jj])
             prob.set_val('D',x1s[ii])
             prob.set_val('T',x2s[jj])
             prob.run_model()
             fLCOE[ii,jj] = prob.model.LCOE_comp.get_val('LCOE')
             ftheta[ii,jj] = prob.model.theta_comp.get_val('theta')*180/np.pi
-            # print(prob.model.theta_comp.get_val('theta')*180/np.pi)
-            # print(x1s[ii],x2s[jj],fLCOE[ii,jj], ftheta[ii,jj])
+            # print(x1s[ii],x2s[jj],fLCOE[ii,jj], ftheta[ii,jj],prob.model.mball_comp.get_val('mball'))
 
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    csLCOE = ax1.contour(x1s,x2s,np.transpose(fLCOE),np.linspace(1,200,100))
-    cstheta = ax2.contour(x1s,x2s,np.transpose(ftheta),np.linspace(0,45,100))
+    fig, (ax1, ax2) = plt.subplots(2, sharex=True)
+    csLCOE = ax1.contour(x1s,x2s,np.transpose(fLCOE),np.linspace(1,120,100))
+    cstheta = ax2.contour(x1s,x2s,np.transpose(ftheta),np.linspace(0,100,100))
     fig.colorbar(csLCOE,ax=ax1)
     fig.colorbar(cstheta,ax=ax2)
+    ax2.set_xlabel('Diameter [m]')
+    ax1.set_ylabel('Draft [m]')
+    ax2.set_ylabel('Draft [m]')
+    ax1.set_title('LCOE')
+    ax2.set_title('theta [deg]')
