@@ -23,6 +23,11 @@ class computeMball(om.ExplicitComponent):
         self.add_output('t', val=1.0, units='m')
         self.add_output('mball', val=1.0, units='kg')
         self.add_output('msteel', val=1.0, units='kg')
+    
+    def setup_partials(self):
+        self.declare_partials(of='t',wrt=['T'])
+        self.declare_partials(of='mball', wrt=['D','T'], dependent=True, method='fd')
+        self.declare_partials(of='msteel',wrt=['D','T'], dependent=True, method='fd')
         
     def compute(self,inputs,outputs): 
         # Bring in problem constants
@@ -42,11 +47,13 @@ class computeMball(om.ExplicitComponent):
         mball = buoy-msteel-mturb # required ballast
         
         if mball < 0.0:
-            raise om.AnalysisError('Negative ballast!')
+            raise om.AnalysisError('Negative ballast! Increase dimensions')
 
         outputs['mball'] = mball
         outputs['msteel'] = msteel
-
+    
+    def compute_partials(self, inputs, partials):
+        partials['t','T'] = 1/3000.
 
 class computeTheta(om.ExplicitComponent): 
     '''
@@ -68,6 +75,9 @@ class computeTheta(om.ExplicitComponent):
         
         # Output, static pitch angle (IN RADIANS)
         self.add_output('theta', val = 0.0, units='rad')
+    
+    def setup_partials(self):
+        self.declare_partials('*', '*', method='fd')
 
     def compute(self, inputs, outputs):
         # Bring in problem constants
@@ -111,9 +121,6 @@ class computeTheta(om.ExplicitComponent):
             # 1DOF estimate of pitch angle
             theta = FT*hhub/C55 
 
-        if theta < 0.0:
-            # raise om.AnalysisError('Platform is unstable!')
-            theta = 90*np.pi/180
         outputs['theta'] = theta
 
 class computeThrust(om.ExplicitComponent): 
@@ -133,7 +140,7 @@ class computeThrust(om.ExplicitComponent):
     
     def setup_partials(self):
         # Finite difference all partials.
-        self.declare_partials('*', '*', method='fd')
+        self.declare_partials(of='FT', wrt='theta')
         
     def compute(self, inputs, outputs):
         # Bring in problem constants
@@ -141,9 +148,22 @@ class computeThrust(om.ExplicitComponent):
         thrust_0 = params['thrust_0']
         # Pitch angle input
         theta = inputs['theta']
+
+        if theta < 0.0:
+            outputs['FT'] = 1.e-6 * thrust_0
+        else :        
+            # Simple cosine loss of thrust force based on pitch angle
+            outputs['FT'] = thrust_0 * np.cos(theta)
+    
+    def compute_partials(self, inputs, partials):
+        params = self.options['params']
+        thrust_0 = params['thrust_0']
+        theta = inputs['theta']
         
-        # Simple cosine loss of thrust force based on pitch angle
-        outputs['FT'] = thrust_0 * np.cos(theta)
+        if theta < 0.0:
+            partials['FT', 'theta'] = 1.e-6
+        else :
+            partials['FT', 'theta'] = -1. * thrust_0 * np.sin(theta)
 
 class computeLCOE(om.ImplicitComponent):
     '''
@@ -170,7 +190,7 @@ class computeLCOE(om.ImplicitComponent):
 
     def setup_partials(self):
         # Declare FD partials (to be used if partials aren't defined below...)
-        self.declare_partials('*', '*', method='fd')
+        self.declare_partials(of='*', wrt='*')
 
     def apply_nonlinear(self, inputs, outputs, residuals):
         # Bring in problem constants
@@ -202,10 +222,6 @@ class computeLCOE(om.ImplicitComponent):
         # Design Variables
         D = inputs['D'] #diameter in m
         T = inputs['T'] # draft in m
-        # Inputs from other components
-        msteel = inputs['msteel']
-        mball = inputs['mball']
-        theta = inputs['theta']
 
         # Cost factors - can experiment with changing these
         f1 = 20/1E7
@@ -218,6 +234,7 @@ class computeLCOE(om.ImplicitComponent):
         partials['LCOE', 'msteel'] = f1
         partials['LCOE', 'mball'] = f2
         partials['LCOE', 'theta'] = f3*mturb*hhub
+        partials['LCOE', 'LCOE'] = -1.
 
 class expComputeLCOE(om.ExplicitComponent):
     '''
@@ -304,8 +321,8 @@ if __name__ == "__main__":
     
     # Set value of design variables
     # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=25.)
-    model.set_input_defaults('T',val=40.)
+    model.set_input_defaults('D',val=35.)
+    model.set_input_defaults('T',val=180.)
 
     # Connect model to problem     
     prob = om.Problem(model)
@@ -372,8 +389,8 @@ if __name__ == "__main__":
     # om.n2(prob)
     
     
-    x1s = np.linspace(8,60,50)
-    x2s = np.linspace(40,200,100)
+    x1s = np.linspace(8,40,50)
+    x2s = np.linspace(40,160,100)
     fLCOE = np.zeros((len(x1s),len(x2s)))
     ftheta = np.zeros((len(x1s),len(x2s)))
 
@@ -385,12 +402,15 @@ if __name__ == "__main__":
             prob.run_model()
             fLCOE[ii,jj] = prob.model.LCOE_comp.get_val('LCOE')
             ftheta[ii,jj] = prob.model.theta_comp.get_val('theta')*180/np.pi
-            # print(prob.model.theta_comp.get_val('theta')*180/np.pi)
+            if (prob.model.theta_comp.get_val('theta')*180/np.pi) == 0.0 :
+                print('Platform (D = %3.2f, T = %3.2f) is unstable!' %(x1s[ii],x2s[jj]))
             # print(x1s[ii],x2s[jj],fLCOE[ii,jj], ftheta[ii,jj])
 
 
     fig, (ax1, ax2) = plt.subplots(1, 2)
-    csLCOE = ax1.contour(x1s,x2s,np.transpose(fLCOE),np.linspace(1,200,100))
-    cstheta = ax2.contour(x1s,x2s,np.transpose(ftheta),np.linspace(0,45,100))
+    csLCOE = ax1.contourf(x1s,x2s,np.transpose(fLCOE),np.linspace(1,200,100))
+    cstheta = ax2.contourf(x1s,x2s,np.transpose(ftheta),np.linspace(0,45,100))
     fig.colorbar(csLCOE,ax=ax1)
     fig.colorbar(cstheta,ax=ax2)
+
+    plt.show()

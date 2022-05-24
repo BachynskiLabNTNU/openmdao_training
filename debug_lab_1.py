@@ -40,14 +40,14 @@ class computeMball(om.ExplicitComponent):
         D = inputs['D']
         T = inputs['T']
 
-        if (D/T) < (1./3.) :
-            raise om.AnalysisError("Inputs lead to unreasonable pitch angle!")
-        
         # based on T, find thickness and ballast in order to meet vertical equilibrium
         t = 0.03+T/3000
         buoy = np.pi*np.power(D,2)/4*T*rho # displacement water mass
         msteel = rho_steel*(np.pi*D*(T+hfb)*t + 2*np.pi*np.power(D,2)/4*t) # steel mass
         mball = buoy-msteel-mturb # required ballast
+
+        if mball < 0.0:
+            raise om.AnalysisError('Negative ballast! Increase dimensions')
 
         outputs['mball'] = mball
         outputs['msteel'] = msteel
@@ -149,15 +149,21 @@ class computeThrust(om.ExplicitComponent):
         # Pitch angle input
         theta = inputs['theta']
         
-        # Simple cosine loss of thrust force based on pitch angle
-        outputs['FT'] = thrust_0 * np.cos(theta)
+        if theta < 0.0:
+            outputs['FT'] = 1.e-6 * thrust_0
+        else :        
+            # Simple cosine loss of thrust force based on pitch angle
+            outputs['FT'] = thrust_0 * np.cos(theta)
     
     def compute_partials(self, inputs, partials):
         params = self.options['params']
         thrust_0 = params['thrust_0']
         theta = inputs['theta']
         
-        partials['FT','theta'] = -1. * thrust_0 * np.sin(theta)
+        if theta < 0.0:
+            partials['FT', 'theta'] = 1.e-6 
+        else :        
+            partials['FT', 'theta'] = -1. * thrust_0 * np.sin(theta)
 
 class computeLCOE(om.ImplicitComponent):
     '''
@@ -184,7 +190,7 @@ class computeLCOE(om.ImplicitComponent):
 
     def setup_partials(self):
         # Declare FD partials (to be used if partials aren't defined below...)
-        self.declare_partials('*', '*', method='fd')
+        self.declare_partials(of='*', wrt='*')
 
     def apply_nonlinear(self, inputs, outputs, residuals):
         # Bring in problem constants
@@ -232,6 +238,7 @@ class computeLCOE(om.ImplicitComponent):
         partials['LCOE', 'msteel'] = f1
         partials['LCOE', 'mball'] = f2
         partials['LCOE', 'theta'] = f3*mturb*hhub
+        partials['LCOE', 'LCOE'] = -1.
 
 if __name__ == "__main__":
 
@@ -271,12 +278,12 @@ if __name__ == "__main__":
     
     # Set value of design variables
     # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=15.)
-    model.set_input_defaults('T',val=80.)
+    model.set_input_defaults('D',val=21.)
+    model.set_input_defaults('T',val=40.)
 
-    model.add_design_var('D', lower=10., upper=60.)
-    model.add_design_var('T', lower=20., upper=150.)
-    model.add_constraint('theta', lower=-100.)
+    model.add_design_var('D', lower=15., upper=60.)
+    model.add_design_var('T', lower=40., upper=150.)
+    model.add_constraint('theta', lower=-1.)
 
     # Connect model to problem     
     prob = om.Problem(model)
@@ -329,6 +336,15 @@ if __name__ == "__main__":
 
     else:
         raise ValueError("bad solver selection!")
+
+    # # Run model
+    # prob.setup()
+    # prob.run_model()
+
+    # # Debugging printouts
+    # print('Diameter: %2.2f m' %prob.get_val('D'))
+    # print('Draft: %2.2f m' %prob.get_val('T'))
+    # print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
 
     # Add DOE driver
     prob.driver = om.DOEDriver(om.LatinHypercubeGenerator(samples=1000))
