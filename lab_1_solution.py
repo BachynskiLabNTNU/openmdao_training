@@ -25,9 +25,10 @@ class computeMball(om.ExplicitComponent):
         self.add_output('msteel', val=1.0, units='kg')
     
     def setup_partials(self):
+        # Declare partials, must analytically define the first set.  Mixing finite difference and complex step approximations
         self.declare_partials(of='t',wrt=['T'])
-        self.declare_partials(of='mball', wrt=['D','T'], dependent=True, method='fd')
-        self.declare_partials(of='msteel',wrt=['D','T'], dependent=True, method='fd')
+        self.declare_partials(of='mball', wrt=['D','T'], method='fd')
+        self.declare_partials(of='msteel',wrt=['D','T'], method='cs')
         
     def compute(self,inputs,outputs): 
         # Bring in problem constants
@@ -36,7 +37,7 @@ class computeMball(om.ExplicitComponent):
         rho_steel = params['rho_steel']
         mturb = params['mturb']
         hfb = params['hfb']
-        
+        # Design variables
         D = inputs['D']
         T = inputs['T']
         
@@ -46,6 +47,7 @@ class computeMball(om.ExplicitComponent):
         msteel = rho_steel*(np.pi*D*(T+hfb)*t + 2*np.pi*np.power(D,2)/4*t) # steel mass
         mball = buoy-msteel-mturb # required ballast
         
+        # Raise an analysis error if the dimensions provided are too small to support the turbine
         if mball < 0.0:
             raise om.AnalysisError('Negative ballast! Increase dimensions')
 
@@ -53,7 +55,9 @@ class computeMball(om.ExplicitComponent):
         outputs['msteel'] = msteel
     
     def compute_partials(self, inputs, partials):
+        # Analytical definition of this partial
         partials['t','T'] = 1/3000.
+        # Note other partials are estimated, and nothing is needed here
 
 class computeTheta(om.ExplicitComponent): 
     '''
@@ -100,26 +104,20 @@ class computeTheta(om.ExplicitComponent):
         
         g = 9.81 # acceleration due to gravity
 
-        # we can't have negative ballast, the function returns zero and 90 degree theta
-        if mball < 0: 
-            mball = 0
-            theta = np.pi/2
-            hbal = 0
-        else: 
-            #given the ballast mass, we can find the ballast height
-            hbal = mball/(rho_conc*np.pi*np.power(D,2)/4)
-            #total mass of the FWT
-            mtot = msteel + mball  + mturb
-            #hull steel contribution to center of gravity: m*z 
-            mZGsteel = msteel*((-T+hfb)/2) 
-            # overall CG
-            zG = ( mZGsteel + mturb*zturb + mball*(-T+hbal/2))/mtot
-            # waterplane moment of area
-            Iwp = np.pi*np.power((D/2),4)/4
-            # hydrostatic restoring force
-            C55 = rho*g*Iwp - (msteel+mball+mturb)*zG*g - rho*g*np.pi*np.power(D,2)/4*T*T/2
-            # 1DOF estimate of pitch angle
-            theta = FT*hhub/C55 
+        #given the ballast mass, we can find the ballast height
+        hbal = mball/(rho_conc*np.pi*np.power(D,2)/4)
+        #total mass of the FWT
+        mtot = msteel + mball  + mturb
+        #hull steel contribution to center of gravity: m*z 
+        mZGsteel = msteel*((-T+hfb)/2) 
+        # overall CG
+        zG = ( mZGsteel + mturb*zturb + mball*(-T+hbal/2))/mtot
+        # waterplane moment of area
+        Iwp = np.pi*np.power((D/2),4)/4
+        # hydrostatic restoring force
+        C55 = rho*g*Iwp - (msteel+mball+mturb)*zG*g - rho*g*np.pi*np.power(D,2)/4*T*T/2
+        # 1DOF estimate of pitch angle
+        theta = FT*hhub/C55 
 
         outputs['theta'] = theta
 
@@ -149,6 +147,7 @@ class computeThrust(om.ExplicitComponent):
         # Pitch angle input
         theta = inputs['theta']
 
+        # if-statement needed to avoid a negative pitch angle
         if theta < 0.0:
             outputs['FT'] = 1.e-6 * thrust_0
         else :        
@@ -321,8 +320,8 @@ if __name__ == "__main__":
     
     # Set value of design variables
     # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=35.)
-    model.set_input_defaults('T',val=180.)
+    model.set_input_defaults('D',val=25.)
+    model.set_input_defaults('T',val=120.)
 
     # Connect model to problem     
     prob = om.Problem(model)
@@ -388,29 +387,29 @@ if __name__ == "__main__":
     # Create N2 diagram
     # om.n2(prob)
     
-    
-    x1s = np.linspace(8,40,50)
-    x2s = np.linspace(40,160,100)
-    fLCOE = np.zeros((len(x1s),len(x2s)))
-    ftheta = np.zeros((len(x1s),len(x2s)))
+    # # --- Debugging contour plots ---
+    # x1s = np.linspace(8,40,50)
+    # x2s = np.linspace(40,160,100)
+    # fLCOE = np.zeros((len(x1s),len(x2s)))
+    # ftheta = np.zeros((len(x1s),len(x2s)))
 
-    for ii in range(0,len(x1s)):  
-        for jj in range(0,len(x2s)): 
-            # print(x1s[ii],x2s[jj])
-            prob.set_val('D',x1s[ii])
-            prob.set_val('T',x2s[jj])
-            prob.run_model()
-            fLCOE[ii,jj] = prob.model.LCOE_comp.get_val('LCOE')
-            ftheta[ii,jj] = prob.model.theta_comp.get_val('theta')*180/np.pi
-            if (prob.model.theta_comp.get_val('theta')*180/np.pi) == 0.0 :
-                print('Platform (D = %3.2f, T = %3.2f) is unstable!' %(x1s[ii],x2s[jj]))
-            # print(x1s[ii],x2s[jj],fLCOE[ii,jj], ftheta[ii,jj])
+    # for ii in range(0,len(x1s)):  
+    #     for jj in range(0,len(x2s)): 
+    #         # print(x1s[ii],x2s[jj])
+    #         prob.set_val('D',x1s[ii])
+    #         prob.set_val('T',x2s[jj])
+    #         prob.run_model()
+    #         fLCOE[ii,jj] = prob.model.LCOE_comp.get_val('LCOE')
+    #         ftheta[ii,jj] = prob.model.theta_comp.get_val('theta')*180/np.pi
+    #         if (prob.model.theta_comp.get_val('theta')*180/np.pi) == 0.0 :
+    #             print('Platform (D = %3.2f, T = %3.2f) is unstable!' %(x1s[ii],x2s[jj]))
+    #         # print(x1s[ii],x2s[jj],fLCOE[ii,jj], ftheta[ii,jj])
 
 
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    csLCOE = ax1.contourf(x1s,x2s,np.transpose(fLCOE),np.linspace(1,200,100))
-    cstheta = ax2.contourf(x1s,x2s,np.transpose(ftheta),np.linspace(0,45,100))
-    fig.colorbar(csLCOE,ax=ax1)
-    fig.colorbar(cstheta,ax=ax2)
+    # fig, (ax1, ax2) = plt.subplots(1, 2)
+    # csLCOE = ax1.contourf(x1s,x2s,np.transpose(fLCOE),np.linspace(1,200,100))
+    # cstheta = ax2.contourf(x1s,x2s,np.transpose(ftheta),np.linspace(0,45,100))
+    # fig.colorbar(csLCOE,ax=ax1)
+    # fig.colorbar(cstheta,ax=ax2)
 
-    plt.show()
+    # plt.show()

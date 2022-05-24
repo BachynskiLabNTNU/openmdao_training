@@ -41,6 +41,10 @@ class computeMball(om.ExplicitComponent):
         # TODO: calculate required ballast mass (buoyancy minus steel mass and turbine mass)
         mball = 
 
+        # Raise an analysis error if the dimensions provided are too small to support the turbine
+        if mball < 0.0:
+            raise om.AnalysisError('Negative ballast! Increase dimensions')
+
         outputs['mball'] = mball
         outputs['msteel'] = msteel
 

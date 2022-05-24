@@ -39,6 +39,10 @@ class computeMball(om.ExplicitComponent):
         msteel = rho_steel*(np.pi*D*(T+hfb)*t + 2*np.pi*np.power(D,2)/4*t) # steel mass
         mball = buoy-msteel-mturb # required ballast
 
+        # Raise an analysis error if the dimensions provided are too small to support the turbine
+        if mball < 0.0:
+            raise om.AnalysisError('Negative ballast! Increase dimensions')
+
         outputs['mball'] = mball
         outputs['msteel'] = msteel
 
