@@ -320,8 +320,8 @@ if __name__ == "__main__":
     
     # Set value of design variables
     # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=25.)
-    model.set_input_defaults('T',val=120.)
+    model.set_input_defaults('D',val=20.)
+    model.set_input_defaults('T',val=40.)
 
     # Connect model to problem     
     prob = om.Problem(model)
@@ -332,7 +332,7 @@ if __name__ == "__main__":
     solver_flag = 'newton'
 
     if solver_flag == 'newton':
-        prob.model.nonlinear_solver=om.NewtonSolver(iprint=0)
+        prob.model.nonlinear_solver=om.NewtonSolver(iprint=2)
         # solve_subsystems should almost always be turned on
         # it improves solver robustness
         prob.model.nonlinear_solver.options['solve_subsystems'] = True

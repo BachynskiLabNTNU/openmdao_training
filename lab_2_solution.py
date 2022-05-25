@@ -8,7 +8,6 @@ import openmdao.api as om
 from beam_comps import (MomentOfInertiaComp, LocalStiffnessMatrixComp, FEM,
                         ComplianceComp, VolumeComp)
 
-
 class BeamGroup(om.Group):
 
     def initialize(self):
