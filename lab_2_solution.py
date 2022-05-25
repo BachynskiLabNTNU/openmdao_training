@@ -1,12 +1,9 @@
-from __future__ import division
 import numpy as np
 
 import openmdao.api as om
 
-# all of these components have already been created for you,
-# but look in beam_comp.py if you're curious to see how
-from beam_comps import (MomentOfInertiaComp, LocalStiffnessMatrixComp, FEM,
-                        ComplianceComp, VolumeComp)
+# all of these components have already been created for you, but look in beam_comp.py if you're curious to see how
+from beam_comps import (MomentOfInertiaComp, LocalStiffnessMatrixComp, FEM, ComplianceComp, VolumeComp)
 
 class BeamGroup(om.Group):
 
@@ -33,21 +30,25 @@ class BeamGroup(om.Group):
         self.add_subsystem('inputs_comp', inputs_comp)
 
         I_comp = MomentOfInertiaComp(num_elements=num_elements, b=b)
-        self.add_subsystem('I_comp', I_comp)
+        self.add_subsystem('I_comp', 
+            I_comp)
 
         # TODO: Add the rest of the components, following the XDSM
-        comp = LocalStiffnessMatrixComp(num_elements=num_elements, E=E, L=L)
-        self.add_subsystem('local_stiffness_matrix_comp', comp)
+        k_comp = LocalStiffnessMatrixComp(num_elements=num_elements, E=E, L=L)
+        self.add_subsystem('local_stiffness_matrix_comp', 
+            k_comp)
 
-        comp = FEM(num_elements=num_elements,
-                  force_vector=force_vector)
-        self.add_subsystem('FEM', comp)
+        fem_comp = FEM(num_elements=num_elements, force_vector=force_vector)
+        self.add_subsystem('FEM', 
+            fem_comp)
 
-        comp = ComplianceComp(num_elements=num_elements, force_vector=force_vector)
-        self.add_subsystem('compliance_comp', comp)
+        compli_comp = ComplianceComp(num_elements=num_elements, force_vector=force_vector)
+        self.add_subsystem('compliance_comp', 
+            compli_comp)
 
-        comp = VolumeComp(num_elements=num_elements, b=b, L=L)
-        self.add_subsystem('volume_comp', comp)
+        v_comp = VolumeComp(num_elements=num_elements, b=b, L=L)
+        self.add_subsystem('volume_comp', 
+            v_comp)
 
         ############################################
         # Connections between components

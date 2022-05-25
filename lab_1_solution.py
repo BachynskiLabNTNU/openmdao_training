@@ -211,7 +211,7 @@ class computeLCOE(om.ImplicitComponent):
         f4 = 1/1600
 
         # implement the calculation LCOE = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2))
-        residuals['LCOE'] = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2)) - outputs['LCOE']
+        residuals['LCOE'] = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub + f4*np.power(D,2)) - outputs['LCOE']
     
     def linearize(self, inputs, outputs, partials):
         # Bring in problem constants
@@ -279,7 +279,7 @@ class expComputeLCOE(om.ExplicitComponent):
         f3 = 1/1E7 
         f4 = 1/1600
 
-        LCOE = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub+ f4*np.power(D,2))/(np.power(np.cos(theta),3))        
+        LCOE = (msteel*f1 + mball*f2 + f3*theta*mturb*hhub + f4*np.power(D,2))       
         outputs['LCOE'] = LCOE
 
 if __name__ == "__main__":
