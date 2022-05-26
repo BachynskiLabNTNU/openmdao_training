@@ -1,6 +1,3 @@
-from __future__ import division
-from six.moves import range
-
 import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import splu
@@ -58,7 +55,7 @@ class LocalStiffnessMatrixComp(om.ExplicitComponent):
         coeffs *= E / L0 ** 3
 
         self.mtx = mtx = np.zeros((num_elements, 4, 4, num_elements))
-        for ind in range(num_elements):
+        for ind in np.arange(num_elements):
             self.mtx[ind, :, :, ind] = coeffs
 
         self.declare_partials('K_local', 'I',
@@ -68,7 +65,7 @@ class LocalStiffnessMatrixComp(om.ExplicitComponent):
         num_elements = self.options['num_elements']
 
         outputs['K_local'] = 0
-        for ind in range(num_elements):
+        for ind in np.arange(num_elements):
             outputs['K_local'][ind, :, :] = self.mtx[ind, :, :, ind] * inputs['I'][ind]
 
 
@@ -163,7 +160,7 @@ class FEM(om.ImplicitComponent):
         rows[:16] = np.repeat(np.arange(4), 4)
 
         j = 16
-        for ind in range(1, num_elements):
+        for ind in np.arange(1, num_elements):
             ind1 = 2 * ind
             K = inputs['K_local'][ind, :, :]
 
@@ -212,14 +209,12 @@ class ComplianceComp(om.ExplicitComponent):
         self.add_input('displacements', shape=2 * num_nodes)
         self.add_output('compliance')
 
-        self.declare_partials('compliance', 'displacements',
-                              val=force_vector.reshape((1, 2 * num_nodes)))
+        self.declare_partials('compliance', 'displacements', val=force_vector.reshape((1, 2 * num_nodes)))
 
     def compute(self, inputs, outputs):
         force_vector = self.options['force_vector']
 
         outputs['compliance'] = np.dot(force_vector, inputs['displacements'])
-
 
 class VolumeComp(om.ExplicitComponent):
 

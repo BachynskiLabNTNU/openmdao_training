@@ -1,6 +1,7 @@
 import numpy as np
 
 import openmdao.api as om
+import matplotlib.pyplot as plt
 
 # all of these components have already been created for you, but look in beam_comp.py if you're curious to see how
 from beam_comps import (MomentOfInertiaComp, LocalStiffnessMatrixComp, FEM, ComplianceComp, VolumeComp)
@@ -25,59 +26,39 @@ class BeamGroup(om.Group):
         force_vector = np.zeros(2 * num_nodes)
         force_vector[-2] = -1.
 
-        inputs_comp = om.IndepVarComp()
-        inputs_comp.add_output('h', shape=num_elements)
-        self.add_subsystem('inputs_comp', inputs_comp)
-
         I_comp = MomentOfInertiaComp(num_elements=num_elements, b=b)
         self.add_subsystem('I_comp', 
-            I_comp)
+            I_comp,
+            promotes_inputs=['h'],
+            promotes_outputs=['I'])
 
-        # TODO: Add the rest of the components, following the XDSM
         k_comp = LocalStiffnessMatrixComp(num_elements=num_elements, E=E, L=L)
         self.add_subsystem('local_stiffness_matrix_comp', 
-            k_comp)
+            k_comp,
+            promotes_inputs=['I'],
+            promotes_outputs=['K_local'])
 
         fem_comp = FEM(num_elements=num_elements, force_vector=force_vector)
         self.add_subsystem('FEM', 
-            fem_comp)
+            fem_comp,
+            promotes_inputs=['K_local'],
+            promotes_outputs=['u'])
 
+        # connection for: FEM -> compliance
+        # this one is tricky, because you just want the states from the nodes, but not the last 2 which relate to the clamped boundary condition on the left
+        self.connect('u', 'compliance_comp.displacements', src_indices=np.arange(2*num_nodes))
+        
         compli_comp = ComplianceComp(num_elements=num_elements, force_vector=force_vector)
         self.add_subsystem('compliance_comp', 
-            compli_comp)
+            compli_comp,
+            promotes_inputs=[],
+            promotes_outputs=['compliance'])
 
         v_comp = VolumeComp(num_elements=num_elements, b=b, L=L)
         self.add_subsystem('volume_comp', 
-            v_comp)
-
-        ############################################
-        # Connections between components
-        ############################################
-        self.connect('inputs_comp.h', 'I_comp.h')
-        # TODO: connect I_comp -> local_stiffness
-        #               local_stiffness -> FEM
-        #               inputs_comp -> volume
-        self.connect('I_comp.I', 'local_stiffness_matrix_comp.I')
-        self.connect(
-            'local_stiffness_matrix_comp.K_local',
-            'FEM.K_local')
-
-        self.connect(
-            'inputs_comp.h',
-            'volume_comp.h')
-
-        # connection for: FEM -> compliance
-        # this one is tricky, because you just want the states from the nodes,
-        # but not the last 2 which relate to the clamped boundary condition on the left
-
-        self.connect(
-            'FEM.u',
-            'compliance_comp.displacements', src_indices=np.arange(2*num_nodes))
-
-        self.add_design_var('inputs_comp.h', lower=1e-2, upper=10.)
-        self.add_objective('compliance_comp.compliance')
-        self.add_constraint('volume_comp.volume', equals=volume)
-
+            v_comp,
+            promotes_inputs=['h'],
+            promotes_outputs=['volume'])
 
 if __name__ == "__main__":
 
@@ -88,10 +69,15 @@ if __name__ == "__main__":
     b = 0.1
     volume = 0.01
 
-    num_elements = 5
+    num_elements = 50
 
-    prob = om.Problem(model=BeamGroup(E=E, L=L, b=b, volume=volume, num_elements=num_elements))
+    prob = om.Problem()
+    prob.model.add_subsystem('beam', BeamGroup(E=E, L=L, b=b, volume=volume, num_elements=num_elements))
 
+    prob.model.add_design_var('beam.h', lower=1e-2, upper=10.)
+    prob.model.add_objective('beam.compliance')
+    prob.model.add_constraint('beam.volume', equals=volume)
+    
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
     prob.driver.options['tol'] = 1e-9
@@ -109,4 +95,14 @@ if __name__ == "__main__":
     prob.run_driver()
     print('opt time', time.time()-start_time)
 
-    print(prob['inputs_comp.h'])
+    print(prob['beam.h'])
+
+    # #  --- Create N2 diagram
+    # om.n2(prob)
+    
+    # --- Plot thickness result---
+    fig, ax = plt.subplots()
+    csLCOE = ax.plot(np.linspace(0.,2.,num_elements),prob['beam.h'],'-ob')
+    ax.set_xlabel('x')
+    ax.set_ylabel('optimized thickness')
+    plt.show()
