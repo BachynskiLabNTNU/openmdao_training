@@ -5,7 +5,7 @@ import openmdao.api as om
 # all of these components have already been created for you, but look in beam_comp.py if you're curious to see how
 from beam_comps import (MomentOfInertiaComp, LocalStiffnessMatrixComp, FEM, ComplianceComp, VolumeComp)
 
-
+# Note this is a group, not a component!
 class BeamGroup(om.Group):
 
     def initialize(self):
@@ -28,7 +28,7 @@ class BeamGroup(om.Group):
         force_vector = np.zeros(2 * num_nodes)
         force_vector[-2] = -1.
 
-        ## TODO In old versions of OpenMDAO, one had to declare an independent variable component.  This is no longer needed - you don't need to do anything here!
+        ## TODO In old versions of OpenMDAO, one had to declare an independent variable component.  This is no longer needed - you don't need to do anything here and independent variables (h) are created for you
 
         I_comp = MomentOfInertiaComp(num_elements=num_elements, b=b)
         self.add_subsystem('I_comp', 
@@ -36,7 +36,7 @@ class BeamGroup(om.Group):
             promotes_inputs=['h'],
             promotes_outputs=['I'])
 
-        # TODO: Add the rest of the components, following the XDSM
+        # TODO: Add the rest of the components, following the XDSM in the slides
         # self.add_subsystem(...)
 
         # TODO: Be sure to promote variables where needed!
@@ -50,8 +50,6 @@ class BeamGroup(om.Group):
 
         # TODO: If you're curious, try implementing all variable connections with connect() statements. 
 
-
-
 if __name__ == "__main__":
 
     import time
@@ -63,7 +61,7 @@ if __name__ == "__main__":
 
     num_elements = 50
 
-    prob = om.Problem()
+    prob = om.Problem(name='lab_2', reports='n2')
     prob.model.add_subsystem('beam', BeamGroup(E=E, L=L, b=b, volume=volume, num_elements=num_elements))
 
     prob.model.add_design_var('beam.h', lower=1e-2, upper=10.)
@@ -84,8 +82,10 @@ if __name__ == "__main__":
 
     prob.setup()
 
+    # Setup, add timer and run the optimization
+    prob.setup()
     start_time = time.time()
     prob.run_driver()
-    print('opt time %3.2f' %(time.time()-start_time))
-    print('Optimized Thickness:')
+    print('Optimization time: %2.3f s' %(time.time()-start_time))
+    print('Beam Thickness:')
     print(prob['beam.h'])

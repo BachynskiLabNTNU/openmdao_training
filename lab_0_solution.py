@@ -1,8 +1,9 @@
 ## Based on OpenMDAO Training Lab 0, found here: https://github.com/OpenMDAO/openmdao_training
-## Adapted from Spar FWT OpenMDAO model by Erin Bachynski 
+## Adapted from Spar FWT OpenMDAO model by Erin Bachynski-Polić
 
 import openmdao.api as om
 import numpy as np
+import os
 
 class computeMball(om.ExplicitComponent):
     '''
@@ -76,6 +77,7 @@ class computeTheta(om.ExplicitComponent):
         FT = params['FT']
         hhub = params['hhub']
         hfb = params['hfb']
+        g = 9.81 # acceleration due to gravity
 
         # Inputs from mBall component
         mball = inputs['mball']
@@ -85,8 +87,6 @@ class computeTheta(om.ExplicitComponent):
         D = inputs['D']
         T = inputs['T']
         
-        g = 9.81 # acceleration due to gravity
-
         #given the ballast mass, we can find the ballast height
         hbal = mball/(rho_conc*np.pi*np.power(D,2)/4)
         #total mass of the FWT
@@ -120,6 +120,7 @@ if __name__ == "__main__":
         'hhub': 120., # m
         'hfb': 10.0, # m
     }
+    ## --- Solution using variable promotion
     # Add each component as a subsystem, defining the inputs, outputs, and options
     model.add_subsystem('mball_comp',
         computeMball(params=fwt_params),
@@ -129,24 +130,33 @@ if __name__ == "__main__":
         computeTheta(params=fwt_params),
         promotes_inputs=['D','T','mball','msteel'], 
         promotes_outputs=['theta'])
+
+    # ## --- Solution using connections
+    # # Add each component as a subsystem
+    # # Note that we still need some promotions here because we add subsystems directly to the model
+    # model.add_subsystem('mball_comp', computeMball(params=fwt_params),
+    #     promotes_inputs=['D', 'T'])
+    # model.add_subsystem('theta_comp', computeTheta(params=fwt_params),
+    #     promotes_inputs=['D', 'T'],
+    #     promotes_outputs=['theta'])
+    # # Connect variables
+    # model.connect('mball_comp.mball', 'theta_comp.mball')
+    # model.connect('mball_comp.msteel', 'theta_comp.msteel')
+
+    # Connect model to a problem and declare the reports we want (just N2 diagram) 
+    prob = om.Problem(model=model, name='lab_0', reports='n2')
+    prob.model = model
+    prob.setup()
     
     # Set value of design variables
     # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=15.)
-    model.set_input_defaults('T',val=90.)
-
-    # Connect model to a problem and run the problem (just solving the model)    
-    prob = om.Problem(model)
-    prob.model = model
-    prob.setup()
+    prob.set_val('D',val=20.)
+    prob.set_val('T',val=120.)
+    
+    # Run model
     prob.run_model()
     
     # Debugging printouts
     print('Diameter: %2.2f m' %prob.get_val('D'))
     print('Draft: %2.2f m' %prob.get_val('T'))
     print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
-    
-    # Create N2 diagram
-    om.n2(prob)
-
-

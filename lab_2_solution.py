@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 # all of these components have already been created for you, but look in beam_comp.py if you're curious to see how
 from beam_comps import (MomentOfInertiaComp, LocalStiffnessMatrixComp, FEM, ComplianceComp, VolumeComp)
 
+# Note here we are creating a group, rather than a component!  It functions in a similar way, but there is no calculation happening here, only connection of existing components
 class BeamGroup(om.Group):
 
     def initialize(self):
+        # Declare options individually (before we have done this using a dictionary!)
         self.options.declare('E')
         self.options.declare('L')
         self.options.declare('b')
@@ -71,17 +73,29 @@ if __name__ == "__main__":
 
     num_elements = 50
 
-    prob = om.Problem()
+    prob = om.Problem(name='lab_2', reports='n2')
     prob.model.add_subsystem('beam', BeamGroup(E=E, L=L, b=b, volume=volume, num_elements=num_elements))
 
+    # Add a bounded design variable (for thickness)
     prob.model.add_design_var('beam.h', lower=1e-2, upper=10.)
+    # The goal is to minimize compliance (force times displacement)
     prob.model.add_objective('beam.compliance')
+    # Maintain beam volume equal to set value
     prob.model.add_constraint('beam.volume', equals=volume)
     
+    # Use the SciPy optimize functions as the problem's driver (this implements optimization)
     prob.driver = om.ScipyOptimizeDriver()
     prob.driver.options['optimizer'] = 'SLSQP'
     prob.driver.options['tol'] = 1e-9
     prob.driver.options['disp'] = True
+
+    ## --- Recording Example ---
+    recorder = om.SqliteRecorder('beam.sql')
+    prob.driver.add_recorder(recorder)
+    prob.driver.recording_options['includes'] = ['*']
+    prob.add_recorder(recorder)
+    prob.recording_options['includes'] = ['*']
+    # This could then be read later to understand more about the optimization
 
     ######################################################
     # Use top level FD or CS to approximate derivatives
@@ -89,17 +103,14 @@ if __name__ == "__main__":
     # prob.model.approx_totals(method='fd', step_calc="rel", step=1e-3)
     # prob.model.approx_totals(method='cs')
 
+    # Setup, add timer and run the optimization
     prob.setup()
-
     start_time = time.time()
     prob.run_driver()
-    print('opt time', time.time()-start_time)
-
+    print('Optimization time: %2.3f s' %(time.time()-start_time))
+    print('Beam Thickness:')
     print(prob['beam.h'])
 
-    # #  --- Create N2 diagram
-    # om.n2(prob)
-    
     # --- Plot thickness result---
     fig, ax = plt.subplots()
     csLCOE = ax.plot(np.linspace(0.,2.,num_elements),prob['beam.h'],'-ob')

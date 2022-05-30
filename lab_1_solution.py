@@ -1,5 +1,5 @@
 ## Based on OpenMDAO Training Lab 1, found here: https://github.com/OpenMDAO/openmdao_training
-## Adapted from Spar FWT OpenMDAO model by Erin Bachynski 
+## Adapted from Spar FWT OpenMDAO model by Erin Bachynski-Polić
 
 import openmdao.api as om
 import numpy as np
@@ -317,14 +317,9 @@ if __name__ == "__main__":
         computeLCOE(params=fwt_params),
         promotes_inputs=['D','T','mball','msteel','theta'],
         promotes_outputs=['LCOE'])
-    
-    # Set value of design variables
-    # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=20.)
-    model.set_input_defaults('T',val=40.)
 
     # Connect model to problem     
-    prob = om.Problem(model)
+    prob = om.Problem(model=model, name='lab_1', reports='n2')
     prob.model = model
 
     # pick a solver: 'newton', 'broyden', 'nlbgs', or 'nlbjac'
@@ -375,17 +370,20 @@ if __name__ == "__main__":
     else:
         raise ValueError("bad solver selection!")
 
-    # Run model
     prob.setup()
+
+    # Set value of design variables
+    # Change these inputs to see the effect on results
+    prob.set_val('D',val=20.)
+    prob.set_val('T',val=120.)
+
+    # Run model
     prob.run_model()
 
     # Debugging printouts
     print('Diameter: %2.2f m' %prob.get_val('D'))
     print('Draft: %2.2f m' %prob.get_val('T'))
     print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
-    
-    # Create N2 diagram
-    # om.n2(prob)
     
     # # --- Debugging contour plots ---
     # x1s = np.linspace(8,40,50)

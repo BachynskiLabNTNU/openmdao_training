@@ -1,5 +1,5 @@
 ## Based on OpenMDAO Training Lab 1, found here: https://github.com/OpenMDAO/openmdao_training
-## Adapted from Spar FWT OpenMDAO model by Erin Bachynski 
+## Adapted from Spar FWT OpenMDAO model by Erin Bachynski-Polić
 
 import openmdao.api as om
 import numpy as np
@@ -153,12 +153,11 @@ class computeThrust(om.ExplicitComponent):
     def compute_partials(self, inputs, partials):
         #TODO write analytical partials based on the compute() 
 
-
 class computeLCOE(om.ImplicitComponent):
     '''
     Compute a "LCOE" of the spar-type floating wind turbine.  The output is unitless and the formula is not based on specific data or research, and is meant as a demonstration only.  
 
-    Note this is a 'fake' implicit component, we could easily define this explicitly and in fact have done just that below!
+    Note this is a 'fake' implicit component, we could easily define this explicitly and have done so in the solution! 
     '''
     def initialize(self):
         # Pass through dictionary containing constants - parameters that would be fixed during an optimization/solution
@@ -255,19 +254,15 @@ if __name__ == "__main__":
         promotes_inputs=['theta'], 
         promotes_outputs=['FT'])
     #TODO connect LCOE component
-    
-    # Set value of design variables
-    # Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=25.)
-    model.set_input_defaults('T',val=120.)
 
     # Connect model to problem     
-    prob = om.Problem(model)
+    prob = om.Problem(model=model, name='lab_1', reports='n2')
     prob.model = model
 
     # pick a solver: 'newton', 'broyden', 'nlbgs', or 'nlbjac'
     # must define a nonlinear solver since this system has a cycle
-    # TODO experiment with newton and nlbgs for both systems
+    # TODO: Experiment with newton and nlbgs for both systems
+    # TODO: Note that nlbgs and nlbjac won't for systems with implicit components! Try writing an explicit version of the LCOE component (or copy it from the solution)
     solver_flag = 'newton'
 
     if solver_flag == 'newton':
@@ -293,7 +288,7 @@ if __name__ == "__main__":
         prob.model.linear_solver = om.DirectSolver()
 
     elif solver_flag == 'nlbgs':
-        # The nonlinear block Gauss-Seidel solver is an iterative solvver
+        # The nonlinear block Gauss-Seidel solver is an iterative solver
         # Requires no linear solver and works even without derivatives
         prob.model.nonlinear_solver=om.NonlinearBlockGS(iprint=2)
         prob.model.nonlinear_solver.options['maxiter'] = 400
@@ -314,10 +309,15 @@ if __name__ == "__main__":
         raise ValueError("bad solver selection!")
 
     prob.setup()
+
+    # Set value of design variables
+    # Change these inputs to see the effect on results
+    prob.set_val('D',val=20.)
+    prob.set_val('T',val=120.)
+
     ### If using the Newton solver you should generally check your partial derivatives
     ### before you run the model. It won't converge if you made a mistake.
-
-    # TODO if you are using the Newton solver, uncomment to check your partial derivatives
+    # TODO: if you are using the Newton solver, uncomment to check your partial derivatives
     # prob.check_partials(compact_print=True)
 
     # Run model
@@ -327,7 +327,3 @@ if __name__ == "__main__":
     print('Diameter: %2.2f m' %prob.get_val('D'))
     print('Draft: %2.2f m' %prob.get_val('T'))
     print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
-    
-    # Create N2 diagram
-    om.n2(prob)
-    

@@ -1,5 +1,5 @@
 ## Based on OpenMDAO Training Lab 0, found here: https://github.com/OpenMDAO/openmdao_training
-## Adapted from Spar FWT OpenMDAO model by Erin Bachynski 
+## Adapted from Spar FWT OpenMDAO model by Erin Bachynski-Polić
 
 import openmdao.api as om
 import numpy as np
@@ -43,6 +43,7 @@ class computeMball(om.ExplicitComponent):
 
         # Raise an analysis error if the dimensions provided are too small to support the turbine
         if mball < 0.0:
+            # TODO: Consider why this is raised as an error instead of added as a constraint (no code changes needed)
             raise om.AnalysisError('Negative ballast! Increase dimensions')
 
         outputs['mball'] = mball
@@ -80,6 +81,7 @@ class computeTheta(om.ExplicitComponent):
         FT = params['FT']
         hhub = params['hhub']
         hfb = params['hfb']
+        g = 9.81 # acceleration due to gravity
 
         # Inputs from mBall component
         mball = inputs['mball']
@@ -87,11 +89,8 @@ class computeTheta(om.ExplicitComponent):
         
         # Design variables
         D = inputs['D']
-        T = inputs['T']
-        
-        g = 9.81 # acceleration due to gravity
+        T = inputs['T']        
 
-        
         #given the ballast mass, we can find the ballast height
         hbal = mball/(rho_conc*np.pi*np.power(D,2)/4)
         #total mass of the FWT
@@ -119,6 +118,7 @@ if __name__ == "__main__":
         'rho': 1025.0, # kg/m**3
         'rho_steel': 8500.0, # kg/m**3
         'rho_conc': 2650.0, # kg/m**3
+        # TODO: Change turbine properties if you're curious!
         'mturb': 1244000.0, # kg
         'zturb': 92.5, # m
         'FT':  1500000.0, # N
@@ -128,29 +128,25 @@ if __name__ == "__main__":
     # Add each component as a subsystem, defining the inputs, outputs, and options
     model.add_subsystem('mball_comp',
         computeMball(params=fwt_params),
-        # TODO: Promote the appropriate inputs and outputs
+        # TODO: Promote the appropriate inputs and outputs OR add subsystems and make variable connections as needed
         promotes_inputs=[], 
         promotes_outputs=[])
     # TODO: Add a subsystem for the pitch angle calculation, based on on the ballast component
-    
+
+    # Connect model to a problem and run the problem (just solving the model)    
+    prob = om.Problem(model, name='lab_0', reports='n2') # There are many other ways to generate N2 diagrams in OpenMDAO!
+    prob.model = model
+    prob.setup()
     
     # Set value of design variables
     # TODO: Change these inputs to see the effect on results
-    model.set_input_defaults('D',val=15.)
-    model.set_input_defaults('T',val=90.)
-
-    # Connect model to a problem and run the problem (just solving the model)    
-    prob = om.Problem(model)
-    prob.model = model
-    prob.setup()
+    prob.set_val('D',val=20.)
+    prob.set_val('T',val=120.)
+    
+    # Run model
     prob.run_model()
     
     # Debugging printouts
     print('Diameter: %2.2f m' %prob.get_val('D'))
     print('Draft: %2.2f m' %prob.get_val('T'))
     print('Static Pitch Angle: %3.3f deg' %(prob.get_val('theta')*180/np.pi))
-    
-    # Create N2 diagram (can comment out while debugging)
-    om.n2(prob)
-
-
