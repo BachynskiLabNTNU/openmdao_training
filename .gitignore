@@ -1,2 +1,4 @@
 reports/
 *.sql
+ppt_code_snips/
+.vscode/

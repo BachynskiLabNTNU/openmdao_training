@@ -16,8 +16,8 @@ class computeMball(om.ExplicitComponent):
 
     def setup(self):
         # Design variables
-        self.add_input('D', val=1.0, units='m')
-        self.add_input('T', val=1.0, units='m')
+        self.add_input('D', val=20.0, units='m')
+        self.add_input('T', val=120.0, units='m')
         
         # Outputs (ballast mass, and steel mass and thickness)
         self.add_output('t', val=1.0, units='m')
@@ -69,8 +69,8 @@ class computeTheta(om.ExplicitComponent):
 
     def setup(self): 
         # Design variables
-        self.add_input('D', val=1.0, units='m')
-        self.add_input('T', val=1.0, units='m')
+        self.add_input('D', val=20.0, units='m')
+        self.add_input('T', val=120.0, units='m')
         
         # Results from mBall component
         self.add_input('mball',val=0.0, units='kg')
@@ -176,8 +176,8 @@ class computeLCOE(om.ImplicitComponent):
 
     def setup(self): 
         # Design variables
-        self.add_input('D', val=1.0, units='m')
-        self.add_input('T', val=1.0, units='m')
+        self.add_input('D', val=20.0, units='m')
+        self.add_input('T', val=120.0, units='m')
         
         # Results from mBall and theta components
         self.add_input('mball', val=0.0, units='kg')
@@ -245,8 +245,8 @@ class expComputeLCOE(om.ExplicitComponent):
 
     def setup(self): 
         # Design variables
-        self.add_input('D', val=1.0, units='m')
-        self.add_input('T', val=1.0, units='m')
+        self.add_input('D', val=20.0, units='m')
+        self.add_input('T', val=120.0, units='m')
         
         # Results from mBall and theta components
         self.add_input('mball', val=0.0, units='kg')
@@ -371,6 +371,8 @@ if __name__ == "__main__":
         raise ValueError("bad solver selection!")
 
     prob.setup()
+    ### If using the Newton solver you should generally check your partial derivatives before you run the model. It won't converge if you made a mistake.
+    prob.check_partials(compact_print=True, form='central')
 
     # Set value of design variables
     # Change these inputs to see the effect on results
