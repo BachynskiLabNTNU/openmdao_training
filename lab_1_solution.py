@@ -48,6 +48,7 @@ class computeMball(om.ExplicitComponent):
         mball = buoy-msteel-mturb # required ballast
         
         # Raise an analysis error if the dimensions provided are too small to support the turbine
+        ## NOTE - throwing analysis errors isn't best practice in building models, ideally they should be robust enough to handle 'strange' situations the optimizer can think of.  In this case our model is very simplified and we need to include this to avoid non-physical (but mathematically possible) solutions.
         if mball < 0.0:
             raise om.AnalysisError('Negative ballast! Increase dimensions')
 
@@ -340,7 +341,6 @@ if __name__ == "__main__":
 
     elif solver_flag == 'broyden':
         prob.model.nonlinear_solver=om.BroydenSolver(iprint=2)
-        # TODO: Try using broyden with and without a computed jacobian. What happens?
         prob.model.nonlinear_solver.options['compute_jacobian'] = True
         prob.model.nonlinear_solver.options['maxiter'] = 100
         # these options control how tightly the solver converges the system

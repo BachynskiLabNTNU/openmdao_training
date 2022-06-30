@@ -3,3 +3,4 @@ reports/
 ppt_code_snips/
 .vscode/
 *.html
+__pycache__/
